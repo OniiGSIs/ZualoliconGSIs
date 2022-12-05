@@ -6,7 +6,7 @@ PREB_DIR="$LOCALDIR/prebuilt"
 
 git submodule update --init --recursive
 git pull --recurse-submodules
-git clone https://github.com/MinatiScape/vendor_vndk "$PREB_DIR"/vendor_vndk
+git clone https://github.com/OniiGSIs/vendor_vndk "$PREB_DIR"/vendor_vndk
 if [[ -d "$TOOLS_DIR/Firmware_extractor" ]]; then
     git -C "$TOOLS_DIR"/Firmware_extractor fetch origin
     git -C "$TOOLS_DIR"/Firmware_extractor reset --hard origin/master
