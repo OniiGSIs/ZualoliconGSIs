@@ -147,7 +147,7 @@ changeKeylayout() {
     fi
 
     if getprop ro.vendor.build.fingerprint | grep -iq \
-        -e poco/ -e redmi/ -e xiaomi/ ; then
+        -e poco/ -e POCO/ -e redmi/ -e xiaomi/ ; then
         if [ ! -f /mnt/phh/keylayout/uinput-goodix.kl ]; then
           cp /system/phh/empty /mnt/phh/keylayout/uinput-goodix.kl
           chmod 0644 /mnt/phh/keylayout/uinput-goodix.kl
@@ -282,6 +282,9 @@ changeKeylayout() {
     fi
 
     if getprop ro.vendor.build.fingerprint | grep -iq -e motorola/liber; then
+        cp /system/phh/moto-liber-gpio-keys.kl /mnt/phh/keylayout/gpio-keys.kl
+        chmod 0644 /mnt/phh/keylayout/gpio-keys.kl
+
         cp /system/phh/empty /mnt/phh/keylayout/uinput_nav.kl
         chmod 0644 /mnt/phh/keylayout/uinput_nav.kl
         changed=true
@@ -291,6 +294,14 @@ changeKeylayout() {
           cp /system/phh/empty /mnt/phh/keylayout/sf-keys.kl
           chmod 0644 /mnt/phh/keylayout/sf-keys.kl
           changed=true
+    fi
+
+    if getprop ro.vendor.build.fingerprint |grep -iq tecno/kd7;then
+        # Enable dt2w
+        echo cc1 > /proc/gesture_function
+        cp /system/phh/tecno-touchpanel.kl /mnt/phh/keylayout/mtk-tpd.kl
+        chmod 0644 /mnt/phh/keylayout/mtk-tpd.kl
+        changed=true
     fi
 
     if [ "$changed" = true ]; then
@@ -311,11 +322,11 @@ fi
 if mount -o remount,rw /system; then
     resize2fs "$(grep ' /system ' /proc/mounts | cut -d ' ' -f 1)" || true
 else
-    remount system
     mount -o remount,rw /
     major="$(stat -c '%D' /.|sed -E 's/^([0-9a-f]+)([0-9a-f]{2})$/\1/g')"
     minor="$(stat -c '%D' /.|sed -E 's/^([0-9a-f]+)([0-9a-f]{2})$/\2/g')"
     mknod /dev/tmp-phh b $((0x$major)) $((0x$minor))
+    blockdev --setrw /dev/tmp-phh
     resize2fs /dev/root || true
     resize2fs /dev/tmp-phh || true
 fi
@@ -381,9 +392,9 @@ if getprop ro.vendor.build.fingerprint | grep -iq \
     setprop persist.sys.qcom-brightness -1
 fi
 
-# Lenovo Z5s brightness flickers without this setting
+# Lenovo Z5s & Xiaomi Mi10TLite brightness flickers without this setting
 if getprop ro.vendor.build.fingerprint | grep -iq \
-    -e Lenovo/jd2019; then
+    -e Lenovo/jd2019 -e Xiaomi/gauguin -e Redmi/gauguin; then
     setprop persist.sys.qcom-brightness -1
 fi
 
@@ -413,7 +424,7 @@ if getprop ro.vendor.build.fingerprint | grep -q -i \
     -e xiaomi/nitrogen -e xiaomi/whyred -e xiaomi/platina \
     -e xiaomi/ysl -e nubia/nx60 -e nubia/nx61 -e xiaomi/tulip \
     -e xiaomi/lavender -e xiaomi/olive -e xiaomi/olivelite -e xiaomi/pine \
-    -e Redmi/lancelot -e Redmi/galahad; then
+    -e Redmi/lancelot -e Redmi/galahad -e POCO/evergreen; then
     setprop persist.sys.qcom-brightness "$(cat /sys/class/leds/lcd-backlight/max_brightness)"
 fi
 
@@ -446,7 +457,7 @@ if getprop ro.vendor.build.fingerprint | grep -iq \
     -e motorola/hannah -e motorola/james -e motorola/pettyl -e xiaomi/cepheus \
     -e xiaomi/grus -e xiaomi/cereus -e xiaomi/cactus -e xiaomi/raphael -e xiaomi/davinci \
     -e xiaomi/ginkgo -e xiaomi/willow -e xiaomi/laurel_sprout -e xiaomi/andromeda \
-    -e redmi/curtana -e redmi/picasso \
+    -e xiaomi/gauguin -e redmi/gauguin -e redmi/curtana -e redmi/picasso \
     -e bq/Aquaris_M10 ; then
     mount -o bind /mnt/phh/empty_dir /vendor/lib64/soundfx
     mount -o bind /mnt/phh/empty_dir /vendor/lib/soundfx
@@ -568,6 +579,15 @@ fi
 if getprop ro.vendor.build.fingerprint | grep -iq -e Redmi/merlin; then
     setprop debug.sf.latch_unsignaled 1
     setprop debug.sf.enable_hwc_vds 0
+fi
+
+if getprop ro.vendor.build.fingerprint | grep -iq -e Redmi/rosemary \
+    -e Redmi/secret -e Redmi/maltose; then
+    setprop debug.sf.latch_unsignaled 1
+    setprop debug.sf.enable_hwc_vds 0
+
+    # Exclude FP input devices
+    mount -o bind /system/phh/rosemary-excluded-input-devices.xml /system/etc/excluded-input-devices.xml
 fi
 
 if getprop ro.vendor.build.fingerprint | grep -iq -E -e 'huawei|honor' || getprop persist.sys.overlay.huawei | grep -iq -E -e 'true'; then
@@ -933,6 +953,10 @@ if getprop ro.vendor.build.fingerprint |grep -qiE '^samsung/';then
     setprop persist.sys.phh.fod.samsung true
 fi
 
+if getprop ro.vendor.build.fingerprint | grep -q -e samsung/o1s -e samsung/t2s -e samsung/p3s; then
+    setprop persist.sys.phh.ultrasonic_udfps true
+fi
+
 if getprop ro.vendor.build.fingerprint |grep -qiE -e ASUS_I006D -e ASUS_I003;then
 	setprop persist.sys.phh.fod.asus true
 fi
@@ -954,18 +978,39 @@ fi
 
 resetprop_phh ro.bluetooth.library_name libbluetooth.so
 
-if getprop ro.vendor.build.fingerprint |grep -iq xiaomi/cepheus -e xiaomi/nabu;then
-    setprop ro.netflix.bsp_rev Q855-16947-1
+board="$(getprop ro.board.platform)"
+
+if [ "$board" = atoll ] || [ "$board" = sm6250 ]; then
+	setprop ro.netflix.bsp_rev Q6250-19132-1
 fi
 
-if getprop ro.vendor.build.fingerprint |grep -qi redmi/curtana;then
-    setprop ro.netflix.bsp_rev Q6250-19132-1
+if [ "$board" = msmnile ]; then
+	setprop ro.netflix.bsp_rev Q855-16947-1
 fi
 
-if getprop ro.vendor.build.fingerprint |grep -iq xiaomi/renoir;then
-    setprop ro.netflix.bsp_rev Q875-32774-1
-    resetprop_phh ro.config.media_vol_steps 25
-    resetprop_phh ro.config.media_vol_default 15
+if [ "$board" = sm6150 ]; then
+	setprop ro.netflix.bsp_rev Q6150-17263-1
+fi
+
+if [ "$board" = mt6768 ]; then
+	setprop ro.netflix.bsp_rev MTK6768-19055-1
+fi
+
+if [ "$board" = lahaina ]; then
+	setprop ro.netflix.bsp_rev Q875-32774-1
+	resetprop_phh ro.config.media_vol_steps 25
+	resetprop_phh ro.config.media_vol_default 15
+fi
+
+if [ "$board" = universal8825 ];then
+	setprop ro.netflix.bsp_rev EXYNOS1280-34993-1
+fi
+
+if getprop ro.vendor.build.fingerprint |grep -qi Nokia/Phoenix;then
+    setprop ro.netflix.bsp_rev Q845-05000-1
+    setprop debug.sf.latch_unsignaled 1
+    setprop sys.use_fifo_ui 1
+    setprop media.settings.xml "/vendor/etc/media_profiles_vendor.xml"
 fi
 
 # Set props for Vsmart Live's fod
@@ -1007,15 +1052,19 @@ fi
 # Disable secondary watchdogs
 echo -n V > /dev/watchdog1
 
+# Fix watchdog issue on Samsung Galaxy A20s
+if getprop ro.vendor.build.fingerprint | grep -iq samsung/a20sub/a20s; then
+    echo -n V > /dev/watchdog0
+fi
+
+if getprop ro.vendor.build.fingerprint | grep -iq samsung/a11que;then
+	echo -n V > /dev/watchdog0
+fi
+	
 if [ "$vndk" -le 30 ];then
 	# On older vendor the default behavior was to disable color management
 	# Don't override vendor value, merely add a fallback
 	setprop ro.surface_flinger.use_color_management false
-fi
-
-# Disable ODM display overlay for some OPlus devices, which is annoyingly hard to override
-if getprop ro.boot.prjname |grep -qi -e 20846 -e 20847 -e 2084A -e 21615;then
-    mount -o bind /system/phh/empty /odm/overlay/android_framework_res_overlay.display.product.*.apk
 fi
 
 if [ "$(stat -c '%U'  /dev/nxp_smartpa_dev)" == "root" ] &&
@@ -1073,3 +1122,10 @@ mount /system/phh/empty /vendor/bin/install-recovery.sh
 if getprop ro.vendor.radio.default_network |grep -qE '[0-9]';then
   setprop ro.telephony.default_network $(getprop ro.vendor.radio.default_network)
 fi
+
+if getprop ro.vendor.build.fingerprint |grep -iq redmi/camellia;then
+	setprop persist.sys.qcom-brightness 4095
+fi
+
+mount -o bind /mnt/phh/empty_dir /vendor/app/qti-logkit
+mount -o bind /mnt/phh/empty_dir /vendor/app/qti-logkit-lite
